@@ -6,7 +6,7 @@ namespace UnlockAllBackgrounds;
 
 public record ModMetadata : IModMetadata
 {
-    public string ModGuid { get; init; } = "com.joel.unlockallbackgrounds";
+    public string ModGuid { get; init; } = "com.mybutthasarash.unlockallbackgrounds";
     public string Name { get; init; } = "Unlock All Backgrounds";
     public string Author { get; init; } = "Joel";
     public List<string>? Contributors { get; init; }
