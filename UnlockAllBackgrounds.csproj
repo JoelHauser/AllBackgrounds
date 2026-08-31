@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>UnlockAllBackgrounds</AssemblyName>
+    <RootNamespace>UnlockAllBackgrounds</RootNamespace>
+    <Version>1.0.0</Version>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <DeployToSPT Condition="'$(DeployToSPT)' == ''">false</DeployToSPT>
+  </PropertyGroup>
+
+  <!--
+    Compiled against the assemblies shipped in the install rather than the
+    SPTarkov.* NuGet packages, so the build always matches the target server.
+
+      dotnet build -c Release -p:SPTPath="H:\SPT4.1.X"
+  -->
+  <PropertyGroup>
+    <SPTPath Condition="'$(SPTPath)' == ''">$(SPT_PATH)</SPTPath>
+    <SPTPath Condition="'$(SPTPath)' != ''">$(SPTPath.TrimEnd('\'))</SPTPath>
+    <!-- 4.1.x ships the server as SPT_Runtime\; older layouts used SPT\. -->
+    <SPTRuntimePath Condition="Exists('$(SPTPath)\SPT_Runtime\SPTarkov.Server.Core.dll')">$(SPTPath)\SPT_Runtime</SPTRuntimePath>
+    <SPTRuntimePath Condition="'$(SPTRuntimePath)' == ''">$(SPTPath)\SPT</SPTRuntimePath>
+  </PropertyGroup>
+
+  <Target Name="ValidateSPTPath" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(SPTPath)' == ''" Text="SPTPath is not set. e.g. -p:SPTPath=H:\SPT4.1.X" />
+    <Error Condition="!Exists('$(SPTRuntimePath)\SPTarkov.Server.Core.dll')" Text="SPTPath ('$(SPTPath)') contains neither SPT_Runtime\ nor SPT\ with SPTarkov.Server.Core.dll" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="SPTarkov.Server.Core"><HintPath>$(SPTRuntimePath)\SPTarkov.Server.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SPTarkov.Common"><HintPath>$(SPTRuntimePath)\SPTarkov.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SPTarkov.DI"><HintPath>$(SPTRuntimePath)\SPTarkov.DI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SemanticVersioning"><HintPath>$(SPTRuntimePath)\SemanticVersioning.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <Target Name="DeployToSPT" AfterTargets="Build" Condition="'$(DeployToSPT)' == 'true'">
+    <PropertyGroup>
+      <ModDir>$(SPTRuntimePath)\user\mods\UnlockAllBackgrounds</ModDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(ModDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModDir)" />
+  </Target>
+
+  <!--
+    Drop-in archive: extracts straight over the SPT install folder.
+      dotnet build -c Release -p:SPTPath="H:\SPT4.1.X" -t:PackageRelease
+  -->
+  <Target Name="PackageRelease" DependsOnTargets="Build">
+    <PropertyGroup>
+      <StagingDir>$(MSBuildProjectDirectory)\dist\staging</StagingDir>
+      <ModStageDir>$(StagingDir)\SPT_Runtime\user\mods\UnlockAllBackgrounds</ModStageDir>
+      <ZipPath>$(MSBuildProjectDirectory)\dist\UnlockAllBackgrounds-$(Version)-SPT4.1.zip</ZipPath>
+    </PropertyGroup>
+    <RemoveDir Directories="$(StagingDir)" />
+    <MakeDir Directories="$(ModStageDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModStageDir)" />
+    <Copy SourceFiles="README.md" DestinationFolder="$(ModStageDir)" />
+    <Delete Files="$(ZipPath)" />
+    <ZipDirectory SourceDirectory="$(StagingDir)" DestinationFile="$(ZipPath)" />
+    <RemoveDir Directories="$(StagingDir)" />
+    <Message Importance="high" Text="Release archive: $(ZipPath)" />
+  </Target>
+
+</Project>
