@@ -1,3 +1,5 @@
 bin/
 obj/
 dist/
+# Server Room bundles + video: Battlestate assets, fetched from amos's release at build time
+ServerRoom/assets/

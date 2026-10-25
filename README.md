@@ -1,7 +1,8 @@
 # Unlock All Backgrounds
 
-Unlocks every main-menu background in SPT 4.1.x. Install it and they are all
-selectable; no profile edit, no new game, no config.
+Unlocks every main-menu background in SPT 4.1.x, and adds live EFT's **Server
+Room** background. Install it and they are all selectable; no profile edit, no
+new game, no config.
 
 ## What it unlocks
 
@@ -50,6 +51,34 @@ Load order is what makes this work: `WTTContentBackport` runs at
 `TypePriority=100002` and this mod at `1000000` (`PostLoad`), so those entries
 are already in the database when the mod runs.
 
+### Server Room
+
+The mod adds live EFT's server room background (live scene
+`EnvironmentUIScene_Season_LAB`): a looping panorama of a dim server room with
+an animated radio. This is amos's
+[Server Room Background](https://github.com/14amos/ServerRoomBackground)
+(MIT), included with amos's permission (given 2026-10-25):
+
+- `ServerRoom.cs` (server): the customization item under `EnvironmentUI`,
+  named "Server Room" in every locale, at `Preload + 3`, so the unlock pass
+  below picks it up.
+- `ServerRoom/Prepatch`: a BepInEx patcher that adds
+  `EEnvironmentUIType.ServerRoomEnvironmentUiType = 11` (WTT uses 6-10).
+- `ServerRoom/Plugin`: registers the scene with the menu, loads its bundles
+  when picked, and swaps the random camera rotation for the scene's own
+  left/right slide.
+- `ServerRoom/Scripts`: five live-only scripts the scene uses, rebuilt. The
+  bundles reference this assembly by name, so it must stay
+  `ServerRoomBackground.Scripts`.
+
+The two bundles and the video are Battlestate's assets, repacked by amos for
+the 4.1.6 client. They are not committed: the build downloads amos's pinned
+v1.0.0 release, checks its SHA-256, and copies them into `ServerRoom/assets/`.
+
+If amos's standalone mod is also installed, it wins: the client plugin
+declares `BepInIncompatibility` on `com.amos.serverroombackground`, and the
+server item uses the same id, so the background is added once.
+
 Nothing outside `EnvironmentUI` is touched - hideout walls, floors, ceilings,
 shooting-range targets, mannequin poses, gestures and dog tags stay locked.
 
@@ -69,28 +98,36 @@ That means:
 
 ## Building
 
-Requires the **.NET 10 SDK** (the server targets `net10.0`).
+Requires the **.NET 10 SDK** (the server targets `net10.0`; the client
+projects `netstandard2.x`). One build covers the server DLL and the Server
+Room client projects; the first build downloads the Server Room assets.
 
-Note: the .NET 10 SDK on this machine is a **user-local install** at
-`%USERPROFILE%\.dotnet`, which is *not* on PATH — a bare `dotnet` resolves to
-`C:\Program Files\dotnet` and only has SDK 8, which fails with `NETSDK1045`.
-Invoke it by full path:
+    dotnet build -c Release -p:SPTPath="H:\SPT4.1.X"
 
-    & "$env:USERPROFILE\.dotnet\dotnet.exe" build -c Release -p:SPTPath="H:\SPT4.1.X"
+Build and copy straight into the install (server mod, plugin, patcher):
 
-Build and copy straight into the install:
-
-    & "$env:USERPROFILE\.dotnet\dotnet.exe" build -c Release -p:SPTPath="H:\SPT4.1.X" -p:DeployToSPT=true
+    dotnet build -c Release -p:SPTPath="H:\SPT4.1.X" -p:DeployToSPT=true
 
 Produce a drop-in zip in `dist\`:
 
-    & "$env:USERPROFILE\.dotnet\dotnet.exe" build -c Release -p:SPTPath="H:\SPT4.1.X" -t:PackageRelease
+    dotnet build -c Release -p:SPTPath="H:\SPT4.1.X" -t:PackageRelease
 
 ## Installing
 
-Copy `UnlockAllBackgrounds.dll` to:
+Extract the zip over the SPT folder. It contains:
 
-    <SPT install>\SPT_Runtime\user\mods\UnlockAllBackgrounds\
+    BepInEx\patchers\UnlockAllBackgrounds\
+    BepInEx\plugins\UnlockAllBackgrounds\
+    SPT_Runtime\user\mods\UnlockAllBackgrounds\
 
-Server-side only — there is no client plugin, so the 4.1.3 plugin version gate
-does not apply.
+Since 1.0.1 there is a client part (for the Server Room). With Fika, every
+player needs the `BepInEx` folders, not just the host: a client without them
+receives a background type it does not know. The client plugin references no
+`spt-*` assembly, so the 4.1.3 plugin version gate does not apply.
+
+## Credits
+
+- **amos**: [Server Room Background](https://github.com/14amos/ServerRoomBackground),
+  the server room scene repack and its code (MIT, `ServerRoom/LICENSE.txt`),
+  included with their permission.
+- **Battlestate Games**: the scene, models, textures, video and sounds.

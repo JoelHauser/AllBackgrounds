@@ -6,9 +6,11 @@
     <Nullable>enable</Nullable>
     <AssemblyName>UnlockAllBackgrounds</AssemblyName>
     <RootNamespace>UnlockAllBackgrounds</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <DeployToSPT Condition="'$(DeployToSPT)' == ''">false</DeployToSPT>
+    <!-- ServerRoom\ holds the client projects; they are built separately below. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);ServerRoom\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <!--
@@ -37,19 +39,72 @@
     <Reference Include="SemanticVersioning"><HintPath>$(SPTRuntimePath)\SemanticVersioning.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
-  <Target Name="DeployToSPT" AfterTargets="Build" Condition="'$(DeployToSPT)' == 'true'">
+  <!--
+    Server Room client half: three small projects under ServerRoom\ (vendored from amos's
+    Server Room Background, MIT) plus the scene bundles and video, which are Battlestate
+    assets and are not committed. They are taken from amos's pinned GitHub release on first
+    use and checked against its SHA-256.
+  -->
+  <PropertyGroup>
+    <ServerRoomReleaseUrl>https://github.com/14amos/ServerRoomBackground/releases/download/v1.0.0/ServerRoomBackground-1.0.0.zip</ServerRoomReleaseUrl>
+    <ServerRoomReleaseSha256>4F22B3474095171550D91C6B0B3C353B624317E591062C86DC5A6ED5EEB32B0C</ServerRoomReleaseSha256>
+    <ServerRoomAssetsDir>$(MSBuildProjectDirectory)\ServerRoom\assets</ServerRoomAssetsDir>
+    <ServerRoomDownloadDir>$(MSBuildProjectDirectory)\obj\serverroom-release</ServerRoomDownloadDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ServerRoomProject Include="ServerRoom\Prepatch\UnlockAllBackgrounds.ServerRoom.Prepatch.csproj" />
+    <ServerRoomProject Include="ServerRoom\Plugin\UnlockAllBackgrounds.ServerRoom.csproj" />
+  </ItemGroup>
+
+  <Target Name="FetchServerRoomAssets" Condition="!Exists('$(ServerRoomAssetsDir)\serverroom_scene.bundle')">
+    <DownloadFile SourceUrl="$(ServerRoomReleaseUrl)" DestinationFolder="$(ServerRoomDownloadDir)">
+      <Output TaskParameter="DownloadedFile" PropertyName="ServerRoomZip" />
+    </DownloadFile>
+    <GetFileHash Files="$(ServerRoomZip)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="ServerRoomZipHash" />
+    </GetFileHash>
+    <Error Condition="'$(ServerRoomZipHash)' != '$(ServerRoomReleaseSha256)'" Text="$(ServerRoomZip) has SHA-256 $(ServerRoomZipHash), expected $(ServerRoomReleaseSha256)" />
+    <Unzip SourceFiles="$(ServerRoomZip)" DestinationFolder="$(ServerRoomDownloadDir)\x" />
+    <ItemGroup>
+      <ServerRoomReleaseAsset Include="$(ServerRoomDownloadDir)\x\BepInEx\plugins\ServerRoomBackground\*.bundle;$(ServerRoomDownloadDir)\x\BepInEx\plugins\ServerRoomBackground\**\*.webm" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ServerRoomReleaseAsset)" DestinationFiles="@(ServerRoomReleaseAsset->'$(ServerRoomAssetsDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <RemoveDir Directories="$(ServerRoomDownloadDir)" />
+  </Target>
+
+  <Target Name="BuildServerRoom" AfterTargets="Build" DependsOnTargets="FetchServerRoomAssets">
+    <!-- Restore needs its own evaluation, or Build still sees the pre-restore state. -->
+    <MSBuild Projects="@(ServerRoomProject)" Properties="Configuration=$(Configuration);SPTPath=$(SPTPath);_ServerRoomRestore=true" Targets="Restore" />
+    <MSBuild Projects="@(ServerRoomProject)" Properties="Configuration=$(Configuration);SPTPath=$(SPTPath)" Targets="Build" />
+    <PropertyGroup>
+      <ServerRoomPluginOut>$(MSBuildProjectDirectory)\ServerRoom\Plugin\bin\$(Configuration)\netstandard2.1</ServerRoomPluginOut>
+      <ServerRoomScriptsOut>$(MSBuildProjectDirectory)\ServerRoom\Scripts\bin\$(Configuration)\netstandard2.1</ServerRoomScriptsOut>
+      <ServerRoomPrepatchOut>$(MSBuildProjectDirectory)\ServerRoom\Prepatch\bin\$(Configuration)\netstandard2.0</ServerRoomPrepatchOut>
+    </PropertyGroup>
+    <ItemGroup>
+      <!-- Files that land in BepInEx\plugins\UnlockAllBackgrounds\, paths relative to it. -->
+      <ServerRoomPluginFile Include="$(ServerRoomPluginOut)\UnlockAllBackgrounds.ServerRoom.dll;$(ServerRoomScriptsOut)\ServerRoomBackground.Scripts.dll" />
+      <ServerRoomPluginFile Include="$(ServerRoomAssetsDir)\**\*" />
+      <ServerRoomPatcherFile Include="$(ServerRoomPrepatchOut)\UnlockAllBackgrounds.ServerRoom.Prepatch.dll" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="DeployToSPT" AfterTargets="BuildServerRoom" Condition="'$(DeployToSPT)' == 'true'">
     <PropertyGroup>
       <ModDir>$(SPTRuntimePath)\user\mods\UnlockAllBackgrounds</ModDir>
     </PropertyGroup>
     <MakeDir Directories="$(ModDir)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModDir)" />
+    <Copy SourceFiles="@(ServerRoomPluginFile)" DestinationFiles="@(ServerRoomPluginFile->'$(SPTPath)\BepInEx\plugins\UnlockAllBackgrounds\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(ServerRoomPatcherFile)" DestinationFolder="$(SPTPath)\BepInEx\patchers\UnlockAllBackgrounds" />
   </Target>
 
   <!--
     Drop-in archive: extracts straight over the SPT install folder.
       dotnet build -c Release -p:SPTPath="H:\SPT4.1.X" -t:PackageRelease
   -->
-  <Target Name="PackageRelease" DependsOnTargets="Build">
+  <Target Name="PackageRelease" DependsOnTargets="Build;BuildServerRoom">
     <PropertyGroup>
       <StagingDir>$(MSBuildProjectDirectory)\dist\staging</StagingDir>
       <ModStageDir>$(StagingDir)\SPT_Runtime\user\mods\UnlockAllBackgrounds</ModStageDir>
@@ -58,7 +113,8 @@
     <RemoveDir Directories="$(StagingDir)" />
     <MakeDir Directories="$(ModStageDir)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModStageDir)" />
-    <Copy SourceFiles="README.md" DestinationFolder="$(ModStageDir)" />
+    <Copy SourceFiles="@(ServerRoomPluginFile)" DestinationFiles="@(ServerRoomPluginFile->'$(StagingDir)\BepInEx\plugins\UnlockAllBackgrounds\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(ServerRoomPatcherFile)" DestinationFolder="$(StagingDir)\BepInEx\patchers\UnlockAllBackgrounds" />
     <Delete Files="$(ZipPath)" />
     <ZipDirectory SourceDirectory="$(StagingDir)" DestinationFile="$(ZipPath)" />
     <RemoveDir Directories="$(StagingDir)" />
