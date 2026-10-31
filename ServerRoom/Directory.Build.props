@@ -7,7 +7,7 @@
   <PropertyGroup>
     <SPTPath Condition="'$(SPTPath)' == ''">$(SPT_PATH)</SPTPath>
     <SPTPath Condition="'$(SPTPath)' != ''">$(SPTPath.TrimEnd('\'))</SPTPath>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Authors>amos, Joel</Authors>
     <Copyright>Server Room Background code Copyright (c) 2026 amos, MIT License</Copyright>
     <Deterministic>true</Deterministic>

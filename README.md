@@ -65,8 +65,10 @@ an animated radio. This is amos's
 - `ServerRoom/Prepatch`: a BepInEx patcher that adds
   `EEnvironmentUIType.ServerRoomEnvironmentUiType = 11` (WTT uses 6-10).
 - `ServerRoom/Plugin`: registers the scene with the menu, loads its bundles
-  when picked, and swaps the random camera rotation for the scene's own
-  left/right slide.
+  right before the game loads the scene, and swaps the random camera rotation
+  for the scene's own left/right slide. Loading the bundles with the scene,
+  not when the background is asked for, keeps it working with a **Random**
+  menu background: the game settles Random after every patch has seen it.
 - `ServerRoom/Scripts`: five live-only scripts the scene uses, rebuilt. The
   bundles reference this assembly by name, so it must stay
   `ServerRoomBackground.Scripts`.
@@ -75,9 +77,9 @@ The two bundles and the video are Battlestate's assets, repacked by amos for
 the 4.1.6 client. They are not committed: the build downloads amos's pinned
 v1.0.0 release, checks its SHA-256, and copies them into `ServerRoom/assets/`.
 
-If amos's standalone mod is also installed, it wins: the client plugin
-declares `BepInIncompatibility` on `com.amos.serverroombackground`, and the
-server item uses the same id, so the background is added once.
+If amos's standalone mod is also installed, it wins: the client plugin loads
+after it and stands aside (no "failed to load" error), and the server item
+uses the same id, so the background is added once.
 
 Nothing outside `EnvironmentUI` is touched - hideout walls, floors, ceilings,
 shooting-range targets, mannequin poses, gestures and dog tags stay locked.

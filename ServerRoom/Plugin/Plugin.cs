@@ -19,14 +19,19 @@ namespace ServerRoomBackground
     /// <summary>
     /// Live EFT's "server room" main menu background (live scene EnvironmentUIScene_Season_LAB, video Season_BD) as a
     /// selectable background, registered like WTT-ContentBackport's: enum value from the prepatcher, an EnvironmentData
-    /// entry on EnvironmentUI, bundles loaded when it is picked. The scene and its assets are the live files repacked
+    /// entry on EnvironmentUI, bundles loaded when its scene is. The scene and its assets are the live files repacked
     /// (tools/Repack); 5 live-only scripts are rebuilt in ServerRoomBackground.Scripts.
+    ///
+    /// Plays nice with amos's standalone Server Room Background: if it is installed, this plugin still loads (no
+    /// "failed to load" error) and leaves the background to it.
     /// </summary>
-    [BepInPlugin("com.mybutthasarash.unlockallbackgrounds.serverroom", "Unlock All Backgrounds - Server Room", "1.0.1")]
-    // amos's standalone mod registers the same background; if it is installed, let it do the work.
-    [BepInIncompatibility("com.amos.serverroombackground")]
+    [BepInPlugin("com.mybutthasarash.unlockallbackgrounds.serverroom", "Unlock All Backgrounds - Server Room", "1.0.2")]
+    // Loaded after amos's standalone mod, so we can tell whether it is here (not BepInIncompatibility, which would
+    // make BepInEx report this plugin as failed).
+    [BepInDependency(AmosServerRoom, BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
+        const string AmosServerRoom = "com.amos.serverroombackground";
         public const string TypeName = "ServerRoomEnvironmentUiType";
         public const string SceneName = "EnvironmentUIScene_Season_LAB";
         public const string ScenePath = "Assets/Scenes/UI/Seasonal/" + SceneName + ".unity";
@@ -43,6 +48,23 @@ namespace ServerRoomBackground
         {
             Log = Logger;
             dir = Path.GetDirectoryName(Info.Location);
+
+            // amos's standalone mod registers the same background; if it is installed, let it.
+            if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(AmosServerRoom))
+            {
+                Log.LogInfo("[ServerRoomBackground] amos's Server Room Background is installed: it shows the Server Room, this plugin stands aside");
+                return;
+            }
+            RegisterServerRoom();
+        }
+
+        /// <summary>
+        /// Kept out of Awake: it touches ServerRoomBackground.Scripts, an assembly amos's mod ships under the same
+        /// name, so with his mod installed Awake must not even compile a reference to it.
+        /// </summary>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        void RegisterServerRoom()
+        {
             typeOk = Enum.GetNames(typeof(EEnvironmentUIType)).Contains(TypeName);
             if (typeOk) type = (EEnvironmentUIType)Enum.Parse(typeof(EEnvironmentUIType), TypeName);
             Log.LogInfo($"[ServerRoomBackground] enum {TypeName} {(typeOk ? "= " + (int)type : "MISSING (prepatcher not run): background disabled")}; folder {dir}");
@@ -58,7 +80,7 @@ namespace ServerRoomBackground
 
             var h = new Harmony("com.mybutthasarash.unlockallbackgrounds.serverroom");
             h.Patch(AccessTools.Method(typeof(EnvironmentUI), "Awake"), prefix: new HarmonyMethod(typeof(Plugin), nameof(AwakePrefix)));
-            h.Patch(AccessTools.Method(typeof(EnvironmentUI), nameof(EnvironmentUI.SetEnvironmentAsync)), prefix: new HarmonyMethod(typeof(Plugin), nameof(SetEnvironmentPrefix)));
+            h.Patch(AccessTools.Method(typeof(EnvironmentUI), nameof(EnvironmentUI.ScheduleEnvironmentLoading)), prefix: new HarmonyMethod(typeof(Plugin), nameof(ScheduleLoadingPrefix)));
             h.Patch(AccessTools.Method(typeof(EnvironmentUIRoot), nameof(EnvironmentUIRoot.RandomRotate)), prefix: new HarmonyMethod(typeof(Plugin), nameof(RandomRotatePrefix)));
             h.Patch(AccessTools.Method(typeof(EnvironmentUIRoot), nameof(EnvironmentUIRoot.RotateBack)), prefix: new HarmonyMethod(typeof(Plugin), nameof(RotateBackPrefix)));
             h.Patch(AccessTools.Method(typeof(EnvironmentUIRoot), nameof(EnvironmentUIRoot.ResetRotation)), prefix: new HarmonyMethod(typeof(Plugin), nameof(ResetRotationPrefix)));
@@ -74,9 +96,13 @@ namespace ServerRoomBackground
             Log.LogInfo($"[ServerRoomBackground] EnvironmentUI: added {TypeName} -> scene {SceneName} ({list.Count} backgrounds: {string.Join(", ", list.Select(x => x.Type))})");
         }
 
-        static void SetEnvironmentPrefix(EEnvironmentUIType environmentUiType)
+        /// <summary>
+        /// Loads the bundles right before the game loads the scene, however it came to be picked (Random included: the
+        /// game settles Random after every prefix on SetEnvironmentAsync has seen it, so a check there misses it).
+        /// </summary>
+        static void ScheduleLoadingPrefix(string sceneName)
         {
-            if (environmentUiType != type) return;
+            if (sceneName != SceneName) return;
             if (!LoadBundles()) Log.LogError("[ServerRoomBackground] bundles not loaded: the background will not show");
         }
 

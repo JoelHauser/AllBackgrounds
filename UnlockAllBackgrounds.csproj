@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>UnlockAllBackgrounds</AssemblyName>
     <RootNamespace>UnlockAllBackgrounds</RootNamespace>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <DeployToSPT Condition="'$(DeployToSPT)' == ''">false</DeployToSPT>
     <!-- ServerRoom\ holds the client projects; they are built separately below. -->
